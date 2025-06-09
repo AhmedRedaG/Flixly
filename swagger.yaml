@@ -1,0 +1,770 @@
+openapi: 3.0.3
+info:
+  title: Authentication & Authorization API
+  version: 1.0.0
+  description: |
+    Comprehensive API for user authentication, authorization, and two-factor authentication (2FA).
+
+    **Response Format:**
+    - All responses follow a consistent format:
+
+    ```json
+    {
+      "status": "success" | "fail" | "error",
+      "data": {...} | null,
+      "message": "..."
+    }
+    ```
+  contact:
+    name: Ahmed Reda
+    url: https://github.com/AhmedRedaG/Authentication-Authorization-CAT
+    email: ahmedrf.dev@gmail.com
+
+servers:
+  - url: http://localhost:3000/api/v1/
+    description: Local server
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    Cookies:
+      type: apiKey
+      in: cookie
+      name: refreshToken
+
+  schemas:
+    RegisterRequest:
+      type: object
+      required: [name, email, password, confirmPassword]
+      properties:
+        name:
+          type: string
+          minLength: 3
+          maxLength: 256
+          example: "Ahmed Reda"
+        email:
+          type: string
+          format: email
+          example: "ahmed@example.com"
+        password:
+          type: string
+          format: password
+          example: "Password123!"
+        confirmPassword:
+          type: string
+          format: password
+          example: "Password123!"
+
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+          example: "ahmed@example.com"
+        password:
+          type: string
+          format: password
+          example: "Password123!"
+
+    ChangePasswordRequest:
+      type: object
+      required: [oldPassword, newPassword]
+      properties:
+        oldPassword:
+          type: string
+          format: password
+          example: "OldPassword123!"
+        newPassword:
+          type: string
+          format: password
+          example: "NewPassword123!"
+
+    EmailRequest:
+      type: object
+      required: [email]
+      properties:
+        email:
+          type: string
+          format: email
+          example: "ahmed@example.com"
+
+    PasswordRequest:
+      type: object
+      required: [password]
+      properties:
+        password:
+          type: string
+          format: password
+          example: "NewPassword123!"
+
+    SuccessResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: success
+        data:
+          type: object
+
+    FailResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: fail
+        data:
+          type: object
+
+    ErrorResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: error
+        message:
+          type: string
+          example: "Internal server error"
+
+security:
+  - BearerAuth: []
+  - Cookies: []
+
+tags:
+  - name: Auth (Local)
+    description: Local authentication endpoints
+  - name: Auth (Google)
+    description: Google OAuth2 authentication endpoints
+  - name: Auth (Password)
+    description: Password management endpoints
+  - name: Auth (2FA)
+    description: Two-factor authentication endpoints
+
+paths:
+  # Auth (Local)
+  /auth/local/register:
+    post:
+      tags: [Auth (Local)]
+      summary: Register a new user
+      description: Register a new user with name, email, and password.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterRequest"
+      responses:
+        "201":
+          description: User registered successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+              example:
+                status: success
+                data:
+                  userSafeData:
+                    _id: "60d0fe4f5311236168a109ca"
+                    name: "Ahmed Reda"
+                    email: "ahmed@example.com"
+                    role: "user"
+                  message: "Email sent successfully"
+        "409":
+          description: Email already in use
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FailResponse"
+              example:
+                status: fail
+                data:
+                  message: "Email already in use"
+        "422":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FailResponse"
+              example:
+                status: fail
+                data:
+                  message: "Invalid Data"
+                  email: "Email must be valid"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+      security: []
+
+  /auth/local/verify/{verifyToken}:
+    patch:
+      tags: [Auth (Local)]
+      summary: Verify user email
+      description: Verify a user's email address using a verification token.
+      parameters:
+        - in: path
+          name: verifyToken
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Email verified successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+              example:
+                status: success
+                data:
+                  message: "Email verified successfully."
+        "403":
+          description: Invalid or expired token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FailResponse"
+              examples:
+                token_expired:
+                  summary: "Token Expired"
+                  description: "The verification token has expired"
+                  value:
+                    status: fail
+                    data:
+                      message: "Access token expired"
+                invalid_format:
+                  summary: "Invalid Format"
+                  description: "The token format is invalid"
+                  value:
+                    status: fail
+                    data:
+                      message: "Invalid Authorization format"
+        "404":
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FailResponse"
+              example:
+                status: fail
+                data:
+                  message: "User not found with the provided ID"
+        "409":
+          description: User already verified
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FailResponse"
+              example:
+                status: fail
+                data:
+                  message: "User already verified"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+      security: []
+
+  /auth/local/login:
+    post:
+      tags: [Auth (Local)]
+      summary: Login with email and password
+      description: Authenticate user and return JWT access and refresh tokens.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: Login successful or two-factor authentication required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+              examples:
+                login_success:
+                  summary: "Successful login"
+                  description: "User logged in successfully without 2FA"
+                  value:
+                    status: success
+                    data:
+                      accessToken: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                      userSafeData:
+                        _id: "60d0fe4f5311236168a109ca"
+                        name: "Ahmed Reda"
+                        email: "ahmed@example.com"
+                        role: "user"
+                      message: "Login successful"
+        "401":
+          description: Invalid credentials or account not verified
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FailResponse"
+              examples:
+                invalid_credentials:
+                  summary: "Invalid Credentials"
+                  description: "Email or password is incorrect"
+                  value:
+                    status: fail
+                    data:
+                      message: "Invalid email or password"
+                google_account:
+                  summary: "Google Account"
+                  description: "User trying to login with local auth but account was created with Google"
+                  value:
+                    status: fail
+                    data:
+                      message: "This account was registered with Google."
+                unverified_account:
+                  summary: "Unverified Account"
+                  description: "User account exists but email verification is pending"
+                  value:
+                    status: fail
+                    data:
+                      message: "Account not verified, please check your email for verification link."
+        "422":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FailResponse"
+              example:
+                status: fail
+                data:
+                  message: "Invalid Data"
+                  email: "Email must be valid"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+      security: []
+
+  /auth/local/refresh:
+    post:
+      tags: [Auth (Local)]
+      summary: Refresh JWT access token
+      description: Refresh the JWT access token using a valid refresh token (sent via cookie).
+      responses:
+        "200":
+          description: Token refreshed successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+              example:
+                status: success
+                data:
+                  accessToken: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                  message: "Token refreshed successfully"
+        "401":
+          description: no refresh token exist in the cookie
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FailResponse"
+              example:
+                status: fail
+                data:
+                  message: "No oldRefreshToken exist"
+        "403":
+          description: Invalid or expired token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FailResponse"
+              examples:
+                token_expired:
+                  summary: "Token Expired"
+                  description: "The access token has expired"
+                  value:
+                    status: fail
+                    data:
+                      message: "Access token expired"
+                invalid_format:
+                  summary: "Invalid Format"
+                  description: "The authorization format is invalid"
+                  value:
+                    status: fail
+                    data:
+                      message: "Invalid Authorization format"
+                invalid_refresh:
+                  summary: "Invalid Refresh Token"
+                  description: "The refresh token is invalid"
+                  value:
+                    status: fail
+                    data:
+                      message: "Invalid refresh token"
+        "404":
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FailResponse"
+              example:
+                status: fail
+                data:
+                  message: "User not found with the provided ID"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+      security:
+        - Cookies: []
+
+  /auth/local/logout:
+    delete:
+      tags: [Auth (Local)]
+      summary: Logout user
+      description: Logout the user and clear refresh token cookie.
+      responses:
+        "200":
+          description: Logout successful or already logged out
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+              examples:
+                successful_logout:
+                  summary: "Successful Logout"
+                  description: "User was logged in and has been successfully logged out"
+                  value:
+                    status: success
+                    data:
+                      message: "User logged out successfully"
+                already_logged_out:
+                  summary: "Already Logged Out"
+                  description: "User was already logged out, no action needed"
+                  value:
+                    status: success
+                    data:
+                      message: "Already logged out"
+        "403":
+          description: Invalid or expired token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FailResponse"
+              examples:
+                token_expired:
+                  summary: "Token Expired"
+                  description: "The access token has expired"
+                  value:
+                    status: fail
+                    data:
+                      message: "Access token expired"
+                invalid_format:
+                  summary: "Invalid Format"
+                  description: "The authorization format is invalid"
+                  value:
+                    status: fail
+                    data:
+                      message: "Invalid Authorization format"
+        "404":
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FailResponse"
+              example:
+                status: fail
+                data:
+                  message: "User not found with the provided ID"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+      security:
+        - BearerAuth: []
+        - Cookies: []
+
+  # Auth (Google)
+  /auth/google:
+    get:
+      tags: [Auth (Google)]
+      summary: Google OAuth2 login
+      description: Redirects user to Google for authentication.
+      responses:
+        "302":
+          description: Redirect to Google OAuth2
+      security: []
+
+  /auth/google/callback:
+    get:
+      tags: [Auth (Google)]
+      summary: Google OAuth2 callback
+      description: Handles Google OAuth2 callback and authenticates user.
+      responses:
+        "200":
+          description: Login successful or two-factor authentication required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+              examples:
+                login_success:
+                  summary: "Successful login"
+                  description: "User logged in successfully without 2FA"
+                  value:
+                    status: success
+                    data:
+                      accessToken: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                      userSafeData:
+                        _id: "60d0fe4f5311236168a109ca"
+                        name: "Ahmed Reda"
+                        email: "ahmed@example.com"
+                        role: "user"
+                      message: "Login successful"
+        "401":
+          description: Invalid Google credentials
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FailResponse"
+              example:
+                status: fail
+                data:
+                  message: "Invalid Google credentials"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+      security: []
+
+  # Auth (Password)
+  /auth/password/change:
+    patch:
+      tags: [Auth (Password)]
+      summary: Change user password
+      description: Change the password for an authenticated user.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChangePasswordRequest"
+      responses:
+        "200":
+          description: Password changed successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+              example:
+                status: success
+                data:
+                  message: "Password has been successfully changed."
+        "400":
+          description: Invalid new password
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FailResponse"
+              example:
+                status: fail
+                data:
+                  message: "New password must be different from old password"
+        "401":
+          description: Invalid Authorization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FailResponse"
+              examples:
+                missing_header:
+                  summary: "Missing Authorization"
+                  description: "The authorization header is missing"
+                  value:
+                    status: fail
+                    data:
+                      message: "Authorization header is missing"
+                invalid_format:
+                  summary: "Invalid Format"
+                  description: "The authorization format is invalid"
+                  value:
+                    status: fail
+                    data:
+                      message: "Invalid Authorization format"
+                wrong_password:
+                  summary: "Wrong Password"
+                  description: "The old password is incorrect"
+                  value:
+                    status: fail
+                    data:
+                      message: "Old password is wrong"
+        "404":
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FailResponse"
+              example:
+                status: fail
+                data:
+                  message: "User not found with the provided ID"
+        "422":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FailResponse"
+              example:
+                status: fail
+                data:
+                  message: "Invalid Data"
+                  oldPassword: "Password must be valid"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+      security:
+        - BearerAuth: []
+
+  /auth/password/reset:
+    post:
+      tags: [Auth (Password)]
+      summary: Request password reset
+      description: Send a password reset email to the user.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EmailRequest"
+      responses:
+        "200":
+          description: Password reset email sent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+              example:
+                status: success
+                data:
+                  message: "If an account exists for this email, a password reset link has been sent."
+        "422":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FailResponse"
+              example:
+                status: fail
+                data:
+                  message: "Invalid Data"
+                  email: "Email must be valid"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+      security: []
+
+  /auth/password/reset/{resetToken}:
+    patch:
+      tags: [Auth (Password)]
+      summary: Reset password
+      description: Reset the user's password using a reset token.
+      parameters:
+        - in: path
+          name: resetToken
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PasswordRequest"
+      responses:
+        "200":
+          description: Password reset successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+              example:
+                status: success
+                data:
+                  message: "Password has been successfully reset."
+        "401":
+          description: Invalid Authorization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FailResponse"
+              examples:
+                missing_header:
+                  summary: "Missing Authorization"
+                  description: "The authorization header is missing"
+                  value:
+                    status: fail
+                    data:
+                      message: "Authorization header is missing"
+                invalid_format:
+                  summary: "Invalid Format"
+                  description: "The authorization format is invalid"
+                  value:
+                    status: fail
+                    data:
+                      message: "Invalid Authorization format"
+        "403":
+          description: Used token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FailResponse"
+              example:
+                status: fail
+                data:
+                  message: "Reset token is already used"
+        "404":
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FailResponse"
+              example:
+                status: fail
+                data:
+                  message: "User not found with the provided ID"
+        "422":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FailResponse"
+              example:
+                status: fail
+                data:
+                  message: "Invalid Data"
+                  password: "Password must be valid"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+      security: []

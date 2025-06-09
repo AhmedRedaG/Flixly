@@ -1,13 +1,38 @@
 {
-  "name": "cat-jwt-task",
+  "name": "flixly-api",
   "version": "1.0.0",
-  "main": "app.js",
+  "main": "server.js",
   "type": "module",
   "scripts": {
-    "start": "nodemon app.js"
+    "dev": "nodemon src/server.js",
+    "test": "set NODE_ENV=testing && node --experimental-vm-modules node_modules/jest/bin/jest.js"
+  },
+  "jest": {
+    "transform": {}
   },
   "keywords": [],
   "author": "Ahmed Reda",
   "license": "ISC",
-  "description": "simple JWT implementation"
+  "description": "youtube-like clone",
+  "dependencies": {
+    "bcrypt": "^6.0.0",
+    "cookie-parser": "^1.4.7",
+    "cors": "^2.8.5",
+    "dotenv": "^16.5.0",
+    "express": "^5.1.0",
+    "express-rate-limit": "^7.5.0",
+    "express-validator": "^7.2.1",
+    "helmet": "^8.1.0",
+    "jsend-middleware": "^1.0.2",
+    "jsonwebtoken": "^9.0.2",
+    "nodemailer": "^7.0.3",
+    "passport": "^0.7.0",
+    "passport-google-oauth20": "^2.0.0",
+    "swagger-ui-express": "^5.0.1",
+    "yamljs": "^0.3.0"
+  },
+  "devDependencies": {
+    "jest": "^30.0.4",
+    "supertest": "^7.1.3"
+  }
 }
