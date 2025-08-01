@@ -8,22 +8,21 @@ import { getUserByIdOrFail } from "../../utilities/dataHelper.js";
 import * as configs from "../../../config/index.js";
 
 const { HASH_PASSWORD_ROUNDS } = configs.constants.bcrypt;
+const { RESET_TOKEN_AGE_IN_MS } = configs.constants.jwt;
 const { User, ResetToken, RefreshToken } = db;
 
-export const changePasswordService = async (
-  userId,
-  oldPassword,
-  newPassword
-) => {
-  const user = await User.findByPk(userId);
-  if (!user) throw new AppError("User not found with the provided ID", 404);
+export const changePasswordService = async (user, oldPassword, newPassword) => {
+  if (!user.password)
+    throw new AppError("This account was registered with Google.", 401);
 
+  // verify old password
   const matchedPasswords = await bcrypt.compare(oldPassword, user.password);
   if (!matchedPasswords) throw new AppError("Old password is wrong", 401);
 
   if (newPassword === oldPassword)
     throw new AppError("New password must be different from old password");
 
+  // hash new password and save
   const newHashedPassword = await bcrypt.hash(
     newPassword,
     HASH_PASSWORD_ROUNDS
@@ -31,6 +30,7 @@ export const changePasswordService = async (
   user.password = newHashedPassword;
   await user.save();
 
+  // remove all refresh tokens
   await RefreshToken.destroy({
     where: {
       user_id: user.id,
@@ -42,20 +42,59 @@ export const changePasswordService = async (
   };
 };
 
+export const requestResetPasswordMailService = async (email) => {
+  const user = await User.findOne({ where: { email } });
+  if (user) {
+    const resetToken = JwtHelper.createResetToken({ id: user.id });
+
+    console.log(resetToken);
+    await user.createResetToken({
+      token: resetToken,
+      expiresAt: new Date(Date.now() + RESET_TOKEN_AGE_IN_MS),
+    });
+
+    // async mail request without await to avoid blocking I/O
+    sendResetPasswordMail(user, resetToken).catch((error) => {
+      console.error(
+        `Failed to send password reset email for user ${user.id}:`,
+        error
+      );
+    });
+  }
+
+  // to avoid user enumeration
+  return {
+    message:
+      "If an account exists for this email, a password reset link has been sent.",
+  };
+};
+
 export const resetPasswordService = async (resetToken, password) => {
   const decoded = JwtHelper.verifyResetToken(resetToken);
-  const userId = decoded._id;
+  const userId = decoded.id;
 
   const user = await getUserByIdOrFail(userId);
 
-  if (user.resetToken === resetToken)
-    throw new AppError("Reset token is already used", 403);
+  // to ignore token rotation and reuse
+  const resetTokenRecord = await ResetToken.findOne({
+    where: {
+      token: resetToken,
+    },
+  });
+  if (!resetTokenRecord) throw new AppError("Reset token is already used", 403);
+  await resetTokenRecord.destroy();
 
+  // hash new password and save
   const hashedPassword = await bcrypt.hash(password, HASH_PASSWORD_ROUNDS);
   user.password = hashedPassword;
-  user.resetToken = resetToken;
-  user.refreshTokens = [];
   await user.save();
+
+  // remove all refresh tokens
+  await RefreshToken.destroy({
+    where: {
+      user_id: user.id,
+    },
+  });
 
   return { message: "Password has been successfully reset." };
 };
