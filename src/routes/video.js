@@ -16,21 +16,34 @@ router.post("/me", isAuth, videoController.createVideo);
 
 // GET /api/videos/:videoId
 // Response: { video with channel, tags, comments?, view_count }
-router.get("/:videoId", videoController.getVideo);
+router.get("/:videoId", videoController.getPublicVideo);
 
-// PUT /api/videos/:videoId
+// GET /api/videos/:videoId/comments
+// Query: ?page=1&limit=20&sort=newest|oldest|&parent_id=?
+// Response: { comment }
+router.get("/:videoId/comments", videoController.getPublicVideoComments);
+
+// GET /api/videos/:videoId
+// Authorization: Bearer token
+// Response: { video with channel, tags, comments?, view_count }
+router.get("/me/:videoId", isAuth, videoController.getVideo);
+
+// PUT /api/videos/me/:videoId
 // Headers: Authorization (video owner)
 // Body: { title?, description?, thumbnail?, is_private?, tags[] }
 // Response: { video }
+router.put("/me/:videoId", isAuth, videoController.updateVideo);
 
 // DELETE /api/videos/:videoId
 // Headers: Authorization (video owner)
 // Response: { message: "Video deleted" }
+router.delete("/me/:videoId", isAuth, videoController.deleteVideo);
 
 // PATCH /api/videos/:videoId/publish
 // Headers: Authorization (video owner)
 // Body: { publish_at? } // null = publish now
 // Response: { video }
+router.patch("/me/:videoId/publish", isAuth, videoController.publishVideo);
 
 /**
  * VIDEO DISCOVERY & SEARCH

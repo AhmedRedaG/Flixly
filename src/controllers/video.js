@@ -21,9 +21,35 @@ export const createVideo = async (req, res) => {
 
 // GET /api/videos/:videoId
 // Response: { video with channel, tags, comments?, view_count }
-export const getVideo = async (req, res) => {
+export const getPublicVideo = async (req, res) => {
   const { videoId } = req.params;
-  const data = await videoServer.getVideoService(videoId);
+  const data = await videoServer.getPublicVideoService(videoId);
+  res.jsend.success(data);
+};
+
+// GET /api/videos/:videoId/comments
+// Query: ?page=1&limit=20&sort=newest|oldest|&parent_id=?
+// Response: { comment }
+export const getPublicVideoComments = async (req, res) => {
+  const { videoId } = req.params;
+  const { page, limit, sort, parent_id } = req.query;
+  const data = await videoServer.getPublicVideoCommentsService(
+    videoId,
+    page,
+    limit,
+    sort,
+    parent_id
+  );
+  res.jsend.success(data);
+};
+
+// GET /api/videos/:videoId
+// Authorization: Bearer token
+// Response: { video with channel, tags, comments?, view_count }
+export const getVideo = async (req, res) => {
+  const user = req.user;
+  const { videoId } = req.params;
+  const data = await videoServer.getVideoService(user, videoId);
   res.jsend.success(data);
 };
 
@@ -31,15 +57,42 @@ export const getVideo = async (req, res) => {
 // Headers: Authorization (video owner)
 // Body: { title?, description?, thumbnail?, is_private?, tags[] }
 // Response: { video }
+export const updateVideo = async (req, res) => {
+  const user = req.user;
+  const { videoId } = req.params;
+  const { title, description, is_private, tags } = req.body;
+  const data = await videoServer.updateVideoService(
+    user,
+    videoId,
+    title,
+    description,
+    is_private,
+    tags
+  );
+  res.jsend.success(data);
+};
 
 // DELETE /api/videos/:videoId
 // Headers: Authorization (video owner)
 // Response: { message: "Video deleted" }
+export const deleteVideo = async (req, res) => {
+  const user = req.user;
+  const { videoId } = req.params;
+  const data = await videoServer.deleteVideoService(user, videoId);
+  res.jsend.success(data);
+};
 
 // PATCH /api/videos/:videoId/publish
 // Headers: Authorization (video owner)
 // Body: { publish_at? } // null = publish now
 // Response: { video }
+export const publishVideo = async (req, res) => {
+  const user = req.user;
+  const { videoId } = req.params;
+  const { publish_at } = req.body;
+  const data = await videoServer.publishVideoService(user, videoId, publish_at);
+  res.jsend.success(data);
+};
 
 /**
  * VIDEO DISCOVERY & SEARCH
