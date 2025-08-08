@@ -1,6 +1,7 @@
+import fs from "fs/promises";
+
 import AppError from "../utilities/appError.js";
 import { db } from "../../database/models/index.js";
-import upload from "../../config/multer.js";
 import cloudinary from "../../config/cloudinary.js";
 
 const { Video, Channel, User } = db;
@@ -11,6 +12,11 @@ const { Video, Channel, User } = db;
 // Body: { video_file }
 // Response: { upload_url, processing_id }
 export const uploadVideoService = async (user, videoId, file) => {
+  if (!file) throw new AppError("Invalid file");
+
+  const maxSize = 10 * 1024 * 1024; // 10MB
+  if (file.size > maxSize) throw new AppError("File too large");
+
   const channel = await user.getChannel();
   if (!channel) throw new AppError("Channel not found", 404);
 
@@ -29,11 +35,25 @@ export const uploadVideoService = async (user, videoId, file) => {
   try {
     result = await cloudinary.uploader.upload(file.path, {
       resource_type: "video",
+      folder: "flixly/videos",
+      quality: "auto",
+      fetch_format: "auto",
+      use_filename: true,
+      unique_filename: false,
+      allowed_formats: ["mp4", "mov", "avi", "mkv", "webm"],
+      timeout: 6000000, // 10 minutes
+      eager: [
+        { width: 1280, height: 720, crop: "limit", quality: "auto" },
+        { width: 640, height: 360, crop: "limit", quality: "auto" },
+      ],
+      eager_async: true,
     });
 
     await video.update({
       processing_status: "completed",
+      processing_message: "Upload completed successfully",
       url: result.secure_url,
+      duration: result.duration,
     });
   } catch (err) {
     await video.update({
@@ -42,6 +62,8 @@ export const uploadVideoService = async (user, videoId, file) => {
     });
     throw err;
   }
+
+  await fs.unlink(file.path);
 
   return {
     uploadUrl: result.secure_url,
@@ -54,10 +76,21 @@ export const uploadVideoService = async (user, videoId, file) => {
 // Body: { image_file, type: 'avatar'|'banner'|'thumbnail' }
 // Response: { image_url }
 export const uploadImageService = async (user, processId, file, type) => {
+  if (!file) throw new AppError("Invalid file");
+
   let result;
   try {
     result = await cloudinary.uploader.upload(file.path, {
       resource_type: "image",
+      folder: `flixly/images/${type}`,
+      quality: "auto",
+      fetch_format: "auto",
+      use_filename: true,
+      unique_filename: false,
+      allowed_formats: ["jpg", "jpeg", "png", "gif", "webp"],
+      timeout: 6000000, // 10 minutes
+      overwrite: true,
+      invalidate: true,
     });
   } catch (err) {
     throw err;
@@ -81,6 +114,8 @@ export const uploadImageService = async (user, processId, file, type) => {
       { where: { id: processId } }
     );
   }
+
+  await fs.unlink(file.path);
 
   return {
     imageUrl: result.secure_url,
