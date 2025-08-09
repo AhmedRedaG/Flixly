@@ -40,6 +40,7 @@ export const constants = {
       "title",
       "thumbnail",
       "views_count",
+      "duration",
       "publish_at",
     ],
   },
@@ -53,5 +54,13 @@ export const constants = {
       "subscribers",
       "created_at",
     ],
+  },
+
+  upload: {
+    MAX_IMAGE_SIZE: 1024 * 1024 * 5,
+    MAX_VIDEO_SIZE: 1024 * 1024 * 10, // 10M free cloudinary plane
+    ALLOWED_IMAGE_TYPES: ["jpg", "jpeg", "png", "gif", "webp"],
+    ALLOWED_VIDEO_TYPES: ["mp4", "mov", "avi", "mkv", "webm"],
+    CLOUDINARY_UPLOAD_TIMEOUT: 6000000, // 10 minutes
   },
 };

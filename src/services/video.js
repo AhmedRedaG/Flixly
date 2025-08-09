@@ -426,11 +426,13 @@ export const publishVideoService = async (user, videoId, publishAt) => {
     );
   }
 
-  if (publishAt && new Date(publishAt) > new Date())
+  if (publishAt && new Date(publishAt) > new Date()) {
     video.publish_at = publishAt;
-  else {
+    video.processing_message = "waiting for publish...";
+  } else {
     video.publish_at = new Date();
     video.is_published = true;
+    video.processing_message = "published -_-";
   }
 
   await video.save();
@@ -702,18 +704,22 @@ export const createVideoCommentService = async (
   const video = await Video.findByPk(videoId);
   if (!video) throw new AppError("Video not found", 404);
 
+  let parentComment;
+  if (parentCommentId) {
+    parentComment = await VideoComment.findByPk(parentCommentId);
+    if (!parentComment) throw new AppError("Parent comment not found", 404);
+
+    if (parentComment.video_id !== videoId)
+      throw new AppError("Parent comment not found", 404);
+
+    if (parentComment.parent_comment_id)
+      throw new AppError("Parent comment cannot be a child comment");
+  }
+
   let comment;
   const transaction = await sequelize.transaction();
   try {
     if (parentCommentId) {
-      const parentComment = await VideoComment.findByPk(parentCommentId, {
-        transaction,
-      });
-      if (!parentComment) throw new AppError("Parent comment not found", 404);
-
-      if (parentComment.video_id !== videoId)
-        throw new AppError("Parent comment not found", 404);
-
       await parentComment.increment("child_comments_count", { transaction });
     }
 

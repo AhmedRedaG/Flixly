@@ -2,43 +2,55 @@ import { Router } from "express";
 
 import { isAuth } from "../middlewares/isAuth.js";
 import * as uploadController from "../controllers/upload.js";
-import { videoUploader, imageUploader } from "../middlewares/localUploader.js";
+import {
+  localVideoUploader,
+  localImageUploader,
+} from "../middlewares/localUploader.js";
+import {
+  isUserUploadVideoAllowed,
+  isUserUploadImageAllowed,
+} from "../middlewares/isAllowedToUpload.js";
 import isValid from "../middlewares/isValid.js";
+import isValidLocalUploadedFile from "../middlewares/isValidUpload.js";
 import * as uploadValidator from "../validators/shared/upload.js";
 
 const router = Router();
 
-// POST /api/upload/video
+// POST upload/video/:videoId
 // Headers: Authorization
 // Content-Type: multipart/form-data
 // Body: { video_file }
-// Response: { upload_url, processing_id }
+// Response: { message: "Video uploaded successfully" }
 router.post(
   "/video/:videoId",
-  isAuth,
-  uploadValidator.uploadVideo,
+  uploadValidator.uploadVideoId,
   isValid,
-  videoUploader,
+  isAuth,
+  isUserUploadVideoAllowed,
+  localVideoUploader,
+  isValidLocalUploadedFile,
   uploadController.uploadVideo
 );
 
-// POST /api/upload/image
+// POST upload/image/:processId?type=userAvatar|channelAvatar|channelBanner|thumbnail
 // Headers: Authorization
 // Content-Type: multipart/form-data
-// Body: { image_file, type: 'avatar'|'banner'|'thumbnail' }
-// Response: { image_url }
+// Body: { image_file }
+// Response: { message: "Image uploaded successfully" }
 router.post(
   "/image/:processId",
-  isAuth,
-  uploadValidator.uploadImage,
+  uploadValidator.uploadImageIdAndType,
   isValid,
-  imageUploader,
+  isAuth,
+  isUserUploadImageAllowed,
+  localImageUploader,
+  isValidLocalUploadedFile,
   uploadController.uploadImage
 );
 
-// GET /api/upload/status/:videoId
+// GET upload/status/:videoId
 // Headers: Authorization
-// Response: { status, progress?, error?, video_url? }
+// Response: { status, progress }
 router.get(
   "/status/:videoId",
   isAuth,

@@ -2,7 +2,6 @@ import express from "express";
 import path from "path";
 import cookieParser from "cookie-parser";
 import jsendMiddleware from "jsend-middleware";
-import helmet from "helmet";
 import cors from "cors";
 
 import "../config/passport.js";
@@ -15,7 +14,7 @@ import tagRouter from "./routes/tag.js";
 import uploadRouter from "./routes/upload.js";
 import pagesRouter from "./routes/pages.js";
 import rateLimiter from "./middlewares/rateLimiter.js";
-import requestDurationLogger from "./middlewares/requestDurationLogger.js";
+import requestLogger from "./middlewares/requestLogger.js";
 import errorHandler from "./middlewares/errorHandler.js";
 import { swaggerMiddlewares } from "./middlewares/swaggerDocs.js";
 
@@ -32,9 +31,8 @@ app.set("views", path.join(process.cwd(), "src", "views"));
 app.use(express.static(path.join(process.cwd(), "public")));
 
 app.use(rateLimiter);
-app.use(requestDurationLogger);
+app.use(requestLogger);
 
-app.use("/api/v1/docs", swaggerMiddlewares);
 app.use("/api/v1/auth", authRouter);
 app.use("/api/v1/users", userRouter);
 app.use("/api/v1/channels", channelRouter);
@@ -42,7 +40,8 @@ app.use("/api/v1/videos", videoRouter);
 app.use("/api/v1/comments", commentRouter);
 app.use("/api/v1/tags", tagRouter);
 app.use("/api/v1/upload", uploadRouter);
-app.use("/pages/", pagesRouter);
+app.use("/pages", pagesRouter);
+app.use("/docs", swaggerMiddlewares);
 app.use(errorHandler);
 
 export default app;

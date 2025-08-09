@@ -1,5 +1,5 @@
 {
-  "name": "flixly-api",
+  "name": "Flixly API",
   "version": "1.0.0",
   "main": "server.js",
   "type": "module",
@@ -20,7 +20,7 @@
   "keywords": [],
   "author": "Ahmed Reda",
   "license": "ISC",
-  "description": "youtube-like clone",
+  "description": "REST API for a YouTube-like backend",
   "dependencies": {
     "bcrypt": "^6.0.0",
     "cloudinary": "^2.7.0",
@@ -43,6 +43,7 @@
     "pg-hstore": "^2.3.4",
     "sequelize": "^6.37.7",
     "swagger-ui-express": "^5.0.1",
+    "winston": "^3.17.0",
     "yamljs": "^0.3.0"
   },
   "devDependencies": {
