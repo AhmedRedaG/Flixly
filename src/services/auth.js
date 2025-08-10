@@ -2,24 +2,26 @@ import bcrypt from "bcrypt";
 import { Op } from "sequelize";
 import crypto from "crypto";
 
-import { db } from "../../database/models/index.js";
+import { db, sequelize } from "../../database/models/index.js";
 import AppError from "../utilities/appError.js";
 import * as JwtHelper from "../utilities/jwtHelper.js";
 import { generateTokensForUser } from "../utilities/authHelper.js";
 import { getSafeData, getUserByIdOrFail } from "../utilities/dataHelper.js";
 import {
   sendVerifyTokenMail,
-  sendResetPasswordMail,
+  sendResetPasswordOtpMail,
 } from "../utilities/mailHelper/mailSender.js";
 import { constants } from "../../config/constants.js";
 
 const { HASH_PASSWORD_ROUNDS } = constants.bcrypt;
 const {
-  ALLOWED_OTP_AFTER_IN_MINUTES,
+  OTP_MIN,
+  OTP_MAX,
+  BASE_BACKOFF_MINUTES,
   ALLOWED_OTP_TRIES,
   OTP_EXPIRES_AFTER_IN_MS,
 } = constants.otp;
-const { User, ResetToken, RefreshToken } = db;
+const { User, ResetOtp, RefreshToken } = db;
 
 export const postRegisterService = async (
   firstName,
@@ -196,21 +198,29 @@ export const authWithGoogleService = async (user) => {
 export const requestResetPasswordMailService = async (email) => {
   const user = await User.findOne({ where: { email } });
   if (user) {
-    const otp = crypto.randomInt(100000, 1000000); // 100000–999999 inclusive
+    const otp = crypto.randomInt(OTP_MIN, OTP_MAX);
 
+    // get the last otp
     const [oldOtp] = await user.getResetOtps({
       order: [["created_at", "DESC"]],
       limit: 1,
     });
 
     if (oldOtp) {
+      // double time for every wrong try over allowed tries
+      const addedMinutes =
+        2 ** Math.max(oldOtp.tries - ALLOWED_OTP_TRIES, BASE_BACKOFF_MINUTES);
+
       const allowAfter = new Date(oldOtp.created_at);
-      allowAfter.setMinutes(
-        allowAfter.getMinutes() + ALLOWED_OTP_AFTER_IN_MINUTES
-      );
+      allowAfter.setMinutes(allowAfter.getMinutes() + addedMinutes);
 
       if (oldOtp.tries > ALLOWED_OTP_TRIES && allowAfter > new Date())
-        throw new AppError("Try again later", 422);
+        throw new AppError(
+          `Too many requests. Try again after ${Math.ceil(
+            (allowAfter - new Date()) / 60000
+          )} minutes.`,
+          429
+        );
     }
 
     await user.createResetOtp({
@@ -220,7 +230,7 @@ export const requestResetPasswordMailService = async (email) => {
     });
 
     // async mail request without await to avoid blocking I/O
-    sendResetPasswordMail(user, otp).catch((error) => {
+    sendResetPasswordOtpMail(user, otp).catch((error) => {
       console.error(
         `Failed to send password reset email for user ${user.id}:`,
         error
@@ -231,36 +241,57 @@ export const requestResetPasswordMailService = async (email) => {
   // to avoid user enumeration
   return {
     message:
-      "If an account exists for this email, a password reset link has been sent.",
+      "If an account exists for this email, a password reset code has been sent.",
   };
 };
 
-export const resetPasswordService = async (resetToken, password) => {
-  const decoded = JwtHelper.verifyResetToken(resetToken);
-  const userId = decoded.id;
+export const resetPasswordService = async (email, otp, password) => {
+  const user = await User.findOne({ where: { email } });
+  if (!user) throw new AppError("User not found", 404);
 
-  const user = await getUserByIdOrFail(userId);
-
-  // to ignore token rotation and reuse
-  const resetTokenRecord = await ResetToken.findOne({
-    where: {
-      token: resetToken,
-    },
-  });
-  if (!resetTokenRecord) throw new AppError("Reset token is already used", 403);
-  await resetTokenRecord.destroy();
-
-  // hash new password and save
-  const hashedPassword = await bcrypt.hash(password, HASH_PASSWORD_ROUNDS);
-  user.password = hashedPassword;
-  await user.save();
-
-  // remove all refresh tokens
-  await RefreshToken.destroy({
+  const otpRecord = await ResetOtp.findOne({
     where: {
       user_id: user.id,
+      otp,
+      expires_at: { [Op.gt]: new Date() },
     },
+    order: [["created_at", "DESC"]],
   });
+
+  if (!otpRecord) {
+    throw new AppError("Invalid or expired OTP, please request a new one", 400);
+  }
+
+  const transaction = await sequelize.transaction();
+  try {
+    // delete all after one is valid
+    await ResetOtp.destroy({ where: { user_id: user.id }, transaction });
+
+    // hash new password and save
+    const hashedPassword = await bcrypt.hash(password, HASH_PASSWORD_ROUNDS);
+
+    await Promise.all([
+      user.update(
+        {
+          password: hashedPassword,
+        },
+        { transaction }
+      ),
+
+      // remove all refresh tokens
+      RefreshToken.destroy({
+        where: {
+          user_id: user.id,
+        },
+        transaction,
+      }),
+    ]);
+
+    await transaction.commit();
+  } catch (err) {
+    await transaction.rollback();
+    throw err;
+  }
 
   return { message: "Password has been successfully reset." };
 };
